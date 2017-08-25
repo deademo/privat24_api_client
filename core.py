@@ -80,6 +80,8 @@ class Privat24API:
             from_date = datetime.datetime.strptime(from_date, '%d.%m.%Y')
         if to_date is None:
             to_date = datetime.datetime.now()
+        elif isinstance(to_date, str):
+            to_date = datetime.datetime.strptime(to_date, '%d.%m.%Y')
 
         dates_list = []
         current_from_date = from_date
@@ -94,7 +96,7 @@ class Privat24API:
         for index, (from_date, to_date) in enumerate(dates_list):
             current_from_date = from_date.strftime('%d.%m.%Y')
             current_to_date = to_date.strftime('%d.%m.%Y')
-            print('[{}/{}] Doing request for date {} - {}'.format(index+1, len(dates_list), current_from_date, current_to_date), flush=True)
+            print('[{}/{}] Doing request for date {} - {}'.format(index+1, len(dates_list), current_from_date, current_to_date), flush=True, end='')
             data = """<oper>cmt</oper>
                 <wait>0</wait>
                 <test>0</test>
@@ -118,5 +120,6 @@ class Privat24API:
             # print(response.text)
             result = [{x: item.get(x) for x in item.keys()} 
                       for item in doc.xpath('./data/info/statements/statement')]
+            print(' ... found {} transactions'.format(len(result)), flush=True)
             for item in result:
                 yield item
