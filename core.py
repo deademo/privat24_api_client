@@ -73,7 +73,7 @@ class Privat24API:
             balance = 0
         return balance
 
-    def history(self, card_number, from_date=None, to_date=None, step=15, stop_empty_requests=None):
+    def history(self, card_number, from_date=None, to_date=None, step=15, stop_empty_requests=None, show_progress=True):
         if from_date is None:
             from_date = datetime.datetime.now().replace(year=datetime.datetime.now().year-5)
         elif isinstance(from_date, str):
@@ -97,7 +97,8 @@ class Privat24API:
         for index, (from_date, to_date) in enumerate(dates_list):
             current_from_date = from_date.strftime('%d.%m.%Y')
             current_to_date = to_date.strftime('%d.%m.%Y')
-            print('[{}/{}] Doing request for date {} - {}'.format(index+1, len(dates_list), current_from_date, current_to_date), flush=True, end='')
+            if show_progress:
+                print('[{}/{}] Doing request for date {} - {}'.format(index+1, len(dates_list), current_from_date, current_to_date), flush=True, end='')
             data = """<oper>cmt</oper>
                 <wait>0</wait>
                 <test>0</test>
@@ -121,12 +122,14 @@ class Privat24API:
             # print(response.text)
             result = [{x: item.get(x) for x in item.keys()} 
                       for item in doc.xpath('./data/info/statements/statement')]
-            print(' ... found {} transactions'.format(len(result)), flush=True)
+            if show_progress:
+                print(' ... found {} transactions'.format(len(result)), flush=True)
             for item in result:
                 yield item
 
             if stop_empty_requests is not None and empty_in_row >= int(stop_empty_requests):
-                print('Stop requests, because found {} empty requests in a row'.format(empty_in_row))
+                if show_progress:
+                    print('Stop requests, because found {} empty requests in a row'.format(empty_in_row))
                 break
 
             if len(result) == 0:
