@@ -67,13 +67,7 @@ def main(args):
                         if current_key in month_to_income:
                             needed_values.append(month_to_income[current_key])
 
-                used_months = 1
-                if key != max_key:
-                    used_months += int(args.report_per_month_range)
-                if key != min_key:
-                    used_months += int(args.report_per_month_range)
-
-                buffer_month_to_income[key] = sum(needed_values)/used_months
+                buffer_month_to_income[key] = sum(needed_values)/len(needed_values)
             month_to_income = buffer_month_to_income
 
 
