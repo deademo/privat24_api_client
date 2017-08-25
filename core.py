@@ -1,10 +1,12 @@
-import requests
+import datetime
+from dateutil.relativedelta import relativedelta
 import diskcache
 import hashlib
 import lxml.etree
 import re
+import requests
 import urllib.parse
-import datetime
+
 
 class Privat24API:
 
@@ -15,6 +17,8 @@ class Privat24API:
         self.transaction_url = 'https://api.privatbank.ua/p24api/rest_fiz'
 
         self.cache = diskcache.Cache('privat24requests')
+
+        self.cached_rate = {}
 
     def signature(self, data):
         seed = (data+self.password).encode('utf-8')
@@ -29,7 +33,7 @@ class Privat24API:
             <signature>{}</signature>
         </merchant>""".format(self.id, signature)
 
-    def make_request(self, url, payload, force_reload=False):
+    def make_request(self, url, payload='', force_reload=False, method=requests.post):
 
         h = hashlib.md5()
         h.update(url.encode('utf-8'))
@@ -39,7 +43,10 @@ class Privat24API:
         h = hashlib
 
         if key not in self.cache or force_reload:
-            response = requests.post(url, payload)
+            args = [url]
+            if payload:
+                args.append(payload)
+            response = method(*args)
             self.cache[key] = response
         else:
             response = self.cache[key]
@@ -136,3 +143,22 @@ class Privat24API:
                 empty_in_row += 1
             else:
                 empty_in_row
+
+    def exchange_rate(self, date=None, currency='USD'):
+        if date is None:
+            date = datetime.datetime.now()
+        elif isinstance(date, str):
+            date = datetime.datetime.strptime(date, '%d.%m.%Y')
+
+        while True:
+            url = 'https://api.privatbank.ua/p24api/exchange_rates?date={}'.format(date.strftime('%d.%m.%Y'))
+            response = self.make_request(url, method=requests.get)
+            data = lxml.etree.fromstring(response.text.encode('utf-8'))
+            if not len(data.xpath('.//exchangerate')):
+                date = date + relativedelta(days=-1)
+                continue
+            else:
+                break
+
+        needed_exchange_rate = data.xpath('.//exchangerate[@baseCurrency="UAH" and @currency="{}"]/@saleRateNB'.format(currency))[0]
+        return float(needed_exchange_rate)
