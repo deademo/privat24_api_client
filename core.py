@@ -85,7 +85,7 @@ class Privat24API:
         # print(response.text)
         doc = lxml.etree.fromstring(response.text.encode('utf-8'))
         try:
-            balance = float(doc.xpath('./data/info/cardbalance/balance/text()')[0])
+            balance = float(doc.xpath('./data/info/cardbalance/av_balance/text()')[0])
         except:
             balance = 0
         return balance

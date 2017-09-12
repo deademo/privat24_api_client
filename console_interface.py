@@ -29,6 +29,8 @@ parser.add_argument('-rmr', '--report_per_month_range', help='Will calculate ave
 
 parser.add_argument('-cu', '--currency', help='Set currency of values, by default currency of card')
 
+parser.add_argument('-q', '--quiet', action='store_true', help='Will display only values, without description')
+
 def main(args):
     api = Privat24API(args.merchant_id, args.password, cache=cache_type.NO_CACHE if args.no_cache else cache_type.DISK_CACHE)
     if args.remove_cache:
@@ -47,7 +49,11 @@ def main(args):
             print('{date} - {value:,.2f}'.format(date=key, value=value))
 
     if args.balance:
-        print('Current balance: {:,}'.format(api.card_balance(args.card_number)))
+        balance = api.card_balance(args.card_number)
+        if args.quiet:
+            print(balance)
+        else:
+            print('Current balance: {:,}'.format(balance))
 
     if args.max_balance:
         max_ballance = max([(float(x['rest'].split(' ')[0]), x) for x in history], key=lambda x: x[0])
