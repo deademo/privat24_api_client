@@ -1,8 +1,10 @@
 import argparse
 import datetime
 from dateutil.relativedelta import relativedelta
+import os
+import shutil
 
-from core import Privat24API
+from core import Privat24API, cache_type
 
 parser = argparse.ArgumentParser(description='Interface for privat24 api')
 
@@ -14,9 +16,10 @@ parser.add_argument('-f', '--from_date', help='Get history from date, by default
 parser.add_argument('-t', '--to_date', help='Get history to date, by default today')
 
 parser.add_argument('-hi', '--history', action='store_true', help='Will get and show history of transactions')
-parser.add_argument('-hc', '--cache_history', action='store_true', help='Will cache history of transactions')
 parser.add_argument('-re', '--requests_empty', help='Will stop doing requests if got N empty transactions in a row')
 parser.add_argument('-hp', '--hide_progress', action='store_true', help='Will hide history receiving progress')
+parser.add_argument('-nc', '--no_cache', action='store_true', help='Will disable cache')
+parser.add_argument('-rc', '--remove_cache', action='store_true', help='Will destroy current cache')
 
 parser.add_argument('-b', '--balance', action='store_true', help='Will get and show ballance of card')
 parser.add_argument('-mb', '--max_balance', action='store_true', help='Will show day when was card max ballance')
@@ -27,8 +30,10 @@ parser.add_argument('-rmr', '--report_per_month_range', help='Will calculate ave
 parser.add_argument('-cu', '--currency', help='Set currency of values, by default currency of card')
 
 def main(args):
-    api = Privat24API(args.merchant_id, args.password)
-    if args.history or args.cache_history or args.max_balance or args.report_per_mounth:
+    api = Privat24API(args.merchant_id, args.password, cache=cache_type.NO_CACHE if args.no_cache else cache_type.DISK_CACHE)
+    if args.remove_cache:
+        shutil.rmtree(api.cache_dir)
+    if args.history or args.max_balance or args.report_per_mounth:
         history = list(api.history(args.card_number, from_date=args.from_date, to_date=args.to_date, stop_empty_requests=args.requests_empty, show_progress=not args.hide_progress))
 
     if args.history:
@@ -36,40 +41,7 @@ def main(args):
             print('[{} {trantime}][{rest}] {cardamount} {description} {terminal}'.format('{}.{}.{}'.format(*item['trandate'].split('-')[::-1]), **item), flush=True)
 
     if args.report_per_mounth:
-        month_to_income = {}
-        for item in history:
-            if item['cardamount'].startswith('-'):
-                continue
-
-            date = datetime.datetime.strptime(item['trandate'], '%Y-%m-%d')
-            key = date.strftime('%Y-%m')
-            value = float(item['cardamount'].split(' ')[0])
-
-            if args.currency:
-                exchange_rate = api.exchange_rate(datetime.datetime.strptime(key, '%Y-%m').strftime('%d.%m.%Y'))
-                value /= exchange_rate
-
-            if key not in month_to_income:
-                month_to_income[key] = 0
-            month_to_income[key] += value
-
-        if args.report_per_month_range:
-            buffer_month_to_income = {}
-            max_key = max([datetime.datetime.strptime(x, '%Y-%m') for x in month_to_income]).strftime('%Y-%m')
-            min_key = min([datetime.datetime.strptime(x, '%Y-%m') for x in month_to_income]).strftime('%Y-%m')
-            for key, value in month_to_income.items():
-                date = datetime.datetime.strptime(key, '%Y-%m')
-
-                needed_values = [value]
-                for i in range(1, int(args.report_per_month_range)+1):
-                    for side in (1, -1):
-                        current_key = (date + relativedelta(months=1*side)).strftime('%Y-%m')
-                        if current_key in month_to_income:
-                            needed_values.append(month_to_income[current_key])
-
-                buffer_month_to_income[key] = sum(needed_values)/len(needed_values)
-            month_to_income = buffer_month_to_income
-
+        month_to_income = api.get_income_per_month(history, args.currency, args.report_per_month_range)
 
         for key, value in month_to_income.items():
             print('{date} - {value:,.2f}'.format(date=key, value=value))

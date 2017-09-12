@@ -8,15 +8,24 @@ import requests
 import urllib.parse
 
 
+class cache_type:
+    NO_CACHE = 0
+    DISK_CACHE = 1
+
+
 class Privat24API:
 
-    def __init__(self, id, password):
+    def __init__(self, id, password, cache=cache_type.DISK_CACHE):
         self.id = id
         self.password = password
         self.balance_url = 'https://api.privatbank.ua/p24api/balance'
         self.transaction_url = 'https://api.privatbank.ua/p24api/rest_fiz'
 
-        self.cache = diskcache.Cache('privat24requests')
+        self.cache_dir = 'privat24requests'
+        if cache == cache_type.DISK_CACHE:
+            self.cache = diskcache.Cache(self.cache_dir)
+        elif cache == cache_type.NO_CACHE:
+            self.cache = None
 
         self.cached_rate = {}
 
@@ -42,12 +51,13 @@ class Privat24API:
 
         h = hashlib
 
-        if key not in self.cache or force_reload:
+        if self.cache is None or key not in self.cache or force_reload:
             args = [url]
             if payload:
                 args.append(payload)
             response = method(*args)
-            self.cache[key] = response
+            if self.cache is not None:
+                self.cache[key] = response
         else:
             response = self.cache[key]
 
@@ -162,3 +172,40 @@ class Privat24API:
 
         needed_exchange_rate = data.xpath('.//exchangerate[@baseCurrency="UAH" and @currency="{}"]/@saleRateNB'.format(currency))[0]
         return float(needed_exchange_rate)
+
+    def get_income_per_month(self, history, currency=None, month_range=None):
+        month_to_income = {}
+        for item in history:
+            if item['cardamount'].startswith('-'):
+                continue
+
+            date = datetime.datetime.strptime(item['trandate'], '%Y-%m-%d')
+            key = date.strftime('%Y-%m')
+            value = float(item['cardamount'].split(' ')[0])
+
+            if currency:
+                exchange_rate = self.exchange_rate(datetime.datetime.strptime(key, '%Y-%m').strftime('%d.%m.%Y'))
+                value /= exchange_rate
+
+            if key not in month_to_income:
+                month_to_income[key] = 0
+            month_to_income[key] += value
+
+        if month_range:
+            buffer_month_to_income = {}
+            max_key = max([datetime.datetime.strptime(x, '%Y-%m') for x in month_to_income]).strftime('%Y-%m')
+            min_key = min([datetime.datetime.strptime(x, '%Y-%m') for x in month_to_income]).strftime('%Y-%m')
+            for key, value in month_to_income.items():
+                date = datetime.datetime.strptime(key, '%Y-%m')
+
+                needed_values = [value]
+                for i in range(1, int(month_range)+1):
+                    for side in (1, -1):
+                        current_key = (date + relativedelta(months=1*side)).strftime('%Y-%m')
+                        if current_key in month_to_income:
+                            needed_values.append(month_to_income[current_key])
+
+                buffer_month_to_income[key] = sum(needed_values)/len(needed_values)
+            month_to_income = buffer_month_to_income
+
+        return month_to_income
