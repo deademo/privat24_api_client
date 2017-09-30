@@ -1,2 +1,4 @@
 privat24requests/*
 __pycache__/*
+.accounts
+.privat24requests
